@@ -80,20 +80,22 @@ public class LoadGeneratingClient {
         successCounter = 0;
 
         //default value
-        int maxThreadNum = 50;
+        int maxThreadNum = 5000;
         int iterNum = 100;
         String ip = "127.0.0.1";
         String port = "8080";
 
-        //receive arguments
-        maxThreadNum = Integer.valueOf(args[0]);
-        iterNum = Integer.valueOf(args[1]);
-        ip = args[2];
-        port = args[3];
+//        //receive arguments
+//        maxThreadNum = Integer.valueOf(args[0]);
+//        iterNum = Integer.valueOf(args[1]);
+//        ip = args[2];
+//        port = args[3];
 
         //initialization
 //        final String uri = "http://" + ip+":"+port+"/api/server";
-        final String uri = "http://" + ip+":"+port+"/RESTfulServer/api/server";
+//        final String uri = "http://" + ip+":"+port+"/RESTfulServer/api/server";
+        final String uri = "https://jpuc277e1l.execute-api.us-east-1.amazonaws.com/Prod/server";
+//        final String uri = args[2];
         final ExecutorService threadPool = Executors.newFixedThreadPool(maxThreadNum);
         SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
         System.out.println("Client starting...... Time:" + df.format(new Date()));
@@ -107,6 +109,7 @@ public class LoadGeneratingClient {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        
 
         //end
         System.out.println("================================================");

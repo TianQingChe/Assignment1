@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Serverless Jersey API - yangfan::LambdaServer
+Outputs:
+  LambdaServerApi:
+    Description: URL for application
+    Export:
+      Name: LambdaServerApi
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/ping
+Resources:
+  LambdaServerFunction:
+    Properties:
+      CodeUri: s3://yangfan-assignment1/6519f1786654e1afecb530f8b0bdb7fb
+      Events:
+        GetResource:
+          Properties:
+            Method: any
+            Path: /{proxy+}
+          Type: Api
+      Handler: StreamLambdaHandler::handleRequest
+      MemorySize: 512
+      Policies: AWSLambdaBasicExecutionRole
+      Runtime: java8
+      Timeout: 15
+    Type: AWS::Serverless::Function
+Transform: AWS::Serverless-2016-10-31
