@@ -3,9 +3,7 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,31 +15,42 @@ public class LoadGeneratingClient {
 
     private static long successCounter;
 
-    class Runner implements Runnable{
+    private static List<Long> latencyLst = new ArrayList<Long>();
+
+    static class Runner implements Runnable{
         private WebTarget webTarget;
         private Client client;
         private final String BASE_URI;
         private final int iterNum;
         private CountDownLatch latch;
+        final String test = "Keep visiting you!";
 
         public Runner(String uri,int iterNum,CountDownLatch latch){
-            BASE_URI = uri;
-            client = ClientBuilder.newClient();
-            webTarget = client.target(BASE_URI);
+            this.BASE_URI = uri;
+            this.client = ClientBuilder.newClient();
+            this.webTarget = client.target(BASE_URI);
             this.iterNum = iterNum;
             this.latch = latch;
         }
 
         public void run() {
+            long start = System.currentTimeMillis();
             for(int i = 0; i < iterNum; i++){
                 countRequest();
-                if(this.getStatus().equals("alive")){
+                start = System.currentTimeMillis();
+                String response = this.getStatus();
+                latencyLst.add(System.currentTimeMillis() - start);
+
+                if(response.equals("alive")){
                     countSuccess();
                 }
 
                 countRequest();
-                final String test = "Keep visiting you!";
-                if(this.postText(test,Integer.class) == test.length()){
+                start = System.currentTimeMillis();
+                int resLen = this.postText(test,Integer.class);
+                latencyLst.add(System.currentTimeMillis() - start);
+
+                if(resLen == test.length()){
                     countSuccess();
                 }
             }
@@ -90,57 +99,7 @@ public class LoadGeneratingClient {
         System.out.println("Client starting...... Time:" + df.format(new Date()));
         long start = System.currentTimeMillis();
 
-//        test.warmUp(maxThreadNum,uri,iterNum,threadPool);
-//
-//        test.load(maxThreadNum,uri,iterNum,threadPool);
-
-        //warm up phase
-        int warmThreadNum = (int) (maxThreadNum * 0.1);
-        System.out.println("Warmup phase: All threads running......");
-        long curStart = System.currentTimeMillis();
-
-        test.doTask(warmThreadNum,uri,iterNum,threadPool);
-
-        long curEnd = System.currentTimeMillis();
-        String timeInSeconds = String.format("%.1f", (curEnd - curStart) / 1000.0);
-        System.out.println("Warmup phase complete: Time " + timeInSeconds + " seconds");
-
-
-        //load phase
-        int loadThreadNum = (int) (maxThreadNum * 0.5);
-        System.out.println("Loading phase: All threads running......");
-        curStart = System.currentTimeMillis();
-
-        test.doTask(loadThreadNum,uri,iterNum,threadPool);
-
-        curEnd = System.currentTimeMillis();
-        timeInSeconds = String.format("%.1f", (curEnd - curStart) / 1000.0);
-        System.out.println("Loading phase complete: Time " + timeInSeconds + " seconds");
-
-
-
-        //peak phase
-        System.out.println("Peak phase: All threads running......");
-        curStart = System.currentTimeMillis();
-
-        test.doTask(maxThreadNum,uri,iterNum,threadPool);
-
-        curEnd = System.currentTimeMillis();
-        timeInSeconds = String.format("%.1f", (curEnd - curStart) / 1000.0);
-        System.out.println("Peak phase complete: Time " + timeInSeconds + " seconds");
-
-
-
-        //cool down phase
-        int coolThreadNum = (int) (maxThreadNum * 0.25);
-        System.out.println("Cooldown phase: All threads running......");
-        curStart = System.currentTimeMillis();
-
-        test.doTask(coolThreadNum,uri,iterNum,threadPool);
-
-        curEnd = System.currentTimeMillis();
-        timeInSeconds = String.format("%.1f", (curEnd - curStart) / 1000.0);
-        System.out.println("Cooldown phase complete: Time " + timeInSeconds + " seconds");
+        test.doTask_meaureLatency(maxThreadNum,uri,iterNum,threadPool);
 
         threadPool.shutdown();
         try {
@@ -151,16 +110,48 @@ public class LoadGeneratingClient {
 
         //end
         System.out.println("================================================");
+        String totalSeconds = String.format("%.3f",(System.currentTimeMillis() - start) / 1000.0);
+        System.out.println("Test Wall Time: " + totalSeconds + " seconds");
         System.out.println("Total number of requests sent: " + requestCounter);
         System.out.println("Total number of Successful responses: " + successCounter);
-        String totalSeconds = String.format("%.3f",(System.currentTimeMillis() - start) / 1000.0);
-        System.out.println("Test Wall Time: " + totalSeconds + " s");
+        System.out.println("Overall throughput across all phases: " + requestCounter + " requests/" + totalSeconds + " seconds");
+        System.out.println("Mean latency: " + test.getMeanLatency() + "ms");
+        System.out.println("Median latency: " + test.getMedianLatency() + "ms");
+        System.out.println("95th percentile latency: " + test.get95Percent() + "ms");
+        System.out.println("99th percentile latency: " + test.get99Percent() + "ms");
     }
 
+    long get95Percent(){
+        int index = (int) (latencyLst.size() * 0.95);
+        return latencyLst.get(index);
+    }
 
-    public void doTask(int threadNum,String uri,int iterNum,ExecutorService threadPool){
-        //warm up
+    long get99Percent(){
+        int index = (int) (latencyLst.size() * 0.99);
+        return latencyLst.get(index);
+    }
 
+    long getMeanLatency(){
+        long sum = 0;
+        for(int i=0;i<latencyLst.size();i++){
+            sum += latencyLst.get(i);
+        }
+        return (sum / latencyLst.size());
+    }
+
+    long getMedianLatency(){
+        Collections.sort(latencyLst);
+        int size = latencyLst.size();
+        int mid = size / 2;
+        if(size % 2 == 1){
+            return latencyLst.get(mid);
+        }else{
+            int mid2 = mid - 1;
+            return (latencyLst.get(mid) + latencyLst.get(mid2)) / 2;
+        }
+    }
+
+    void doTask_meaureLatency(int threadNum,String uri,int iterNum, ExecutorService threadPool){
         CountDownLatch latch = new CountDownLatch(threadNum);
 
         for(int i = 0; i < threadNum; i++){
@@ -172,15 +163,14 @@ public class LoadGeneratingClient {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-
     }
 
 
-    public synchronized void countRequest(){
+    static synchronized void countRequest(){
         requestCounter++;
     }
 
-    public synchronized void countSuccess(){
+    static synchronized void countSuccess(){
         successCounter++;
     }
 
